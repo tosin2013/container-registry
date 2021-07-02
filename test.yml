@@ -1,0 +1,10 @@
+---
+- hosts: container_registry
+  remote_user: admin
+  become: true
+  vars: 
+    registry_fqdn: qubinode.tosins-lab.com
+    rhsm_user: takinosh@redhat.com
+    rhsm_pass: c5Xe-d2D4fVM7OlErZHe
+  roles:
+    - container-registry

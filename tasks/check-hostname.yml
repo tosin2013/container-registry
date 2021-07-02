@@ -1,0 +1,32 @@
+---
+- name: Print the gateway for each host when defined
+  ansible.builtin.debug:
+    msg: System {{ inventory_hostname }} has gateway {{ ansible_default_ipv4.gateway }} and FDDN  {{ ansible_fqdn }} and  {{ ansible_default_ipv4.address }} 
+  when: ansible_default_ipv4.gateway is defined
+
+- name: Setting host facts using complex arguments
+  set_fact:
+    host: "{{ ansible_fqdn }}"
+
+- name: Checking if hostname is fdqn
+  debug:
+      msg: "HOSTNAME is correctly set for {{ ansible_fqdn }}"
+  when: ansible_fqdn is regex("(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{0,62}[a-zA-Z0-9]\.)+[a-zA-Z]{2,63}$)")
+
+
+- name: Checking if hostname matches 
+  set_fact:
+    hostmatches: false
+  when: ansible_fqdn !=  registry_fqdn
+
+- name: Ensure hostname set
+  hostname:
+    name: "{{ registry_fqdn }}"
+  when: not hostmatches
+
+- name: Ensure hostname is in /etc/hosts
+  lineinfile:
+    dest: /etc/hosts
+    regexp: "^{{ ansible_default_ipv4.address }}.+$"
+    line: "{{ ansible_default_ipv4.address }} {{ registry_fqdn }} {{ ansible_hostname }}"
+  when: not hostmatches

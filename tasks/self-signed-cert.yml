@@ -1,0 +1,25 @@
+---
+- name: Generate Private key
+  openssl_privatekey: path=/etc/ssl/private/server-master.key
+
+- name: Generate CSR
+  openssl_csr: 
+    path: /etc/ssl/csr/linuxtopic-client.csr
+    privatekey_path: /etc/ssl/private/server-master.key 
+    common_name: "{{ registry_fqdn }}"
+    country_name: IN
+    email_address: "lokesh@{{ registry_fqdn }}"
+    organization_name: linuxtopic
+
+- name: Generate a self signed certificate
+  openssl_certificate:
+    csr_path: /etc/ssl/csr/linuxtopic-client.csr
+    path: /etc/ssl/crts/linuxtopic-self-signed.crt
+    privatekey_path: /etc/ssl/private/server-master.key
+    provider: selfsigned
+
+- name: Copy CA to trust file 
+  ansible.builtin.command: cp  /etc/ssl/crts/linuxtopic-self-signed.crt /etc/pki/ca-trust/source/anchors/
+  
+- name: Update CA Trust 
+  ansible.builtin.command: update-ca-trust extract

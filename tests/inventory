@@ -1,0 +1,6 @@
+container_registry:
+  hosts: 
+    qubinode.tosins-lab.com:
+
+## localhost
+

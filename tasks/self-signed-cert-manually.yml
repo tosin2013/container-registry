@@ -1,0 +1,11 @@
+---
+- name: Manually Configure certs
+  ansible.builtin.shell:  | 
+   openssl req -newkey rsa:4096 -nodes -sha256 -keyout /opt/registry/certs/{{ registry_fqdn }}.key -x509 -days 365 -out /opt/registry/certs/{{ registry_fqdn }}.crt  -subj "/C={{ country_name }}/ST={{ state }}/L={{ city }}/O={{ organization_name }}/CN={{ registry_fqdn }}"
+
+
+- name: Copy CA to trust file 
+  ansible.builtin.command: cp /opt/registry/certs/{{ registry_fqdn }}.crt /etc/pki/ca-trust/source/anchors/
+  
+- name: Update CA Trust 
+  ansible.builtin.command: update-ca-trust extract

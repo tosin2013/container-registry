@@ -1,0 +1,159 @@
+---
+- name:  Check hostname for registry
+  import_tasks: check-hostname.yml
+  tags:
+  - hostnamecheck
+  - deploy
+
+- name: ensure system is registered to Red Hat
+  include_role:
+    name: swygue-redhat-subscription
+  tags:
+  - register
+  - deploy
+
+- name: Install the latest version of  httpd-tools and podman
+  ansible.builtin.package:
+    name:
+      - httpd-tools
+      - podman
+      - python3-pip
+      - python3-pyOpenSSL
+      - ca-certificates
+    state: latest
+  tags:
+  - install_packages
+  - deploy
+  
+- name: Install passlib using pip3
+  ansible.builtin.command: pip3 install passlib
+  tags:
+  - install_packages
+  - deploy
+
+- name: Create /opt/registry/ and associated folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    recurse: yes
+  with_items:
+    - /opt/registry/auth
+    - /etc/ssl/crts/
+    - /etc/ssl/private/
+    - /etc/ssl/csr/
+    - /opt/registry/data
+    - /opt/registry/certs/
+  tags:
+  - create_registry_folders
+  - deploy
+
+- name: Add a user to a password 
+  community.general.htpasswd:
+    path: /opt/registry/auth/htpasswd
+    name: "{{ registry_username }}"
+    password: "{{ registry_password }}"
+    crypt_scheme: bcrypt
+  tags:
+  - create_registry_username
+  - deploy
+    
+- name: Manually Create Certificate for registry 
+  import_tasks: self-signed-cert-manually.yml
+  tags:
+  - create_registry_folders
+  - deploy
+
+- name: permit traffic in default zone on port 5000/tcp
+  ansible.posix.firewalld:
+    port: 5000/tcp
+    permanent: yes
+    state: enabled
+  tags:
+  - configure_firewall_rules
+  - deploy
+
+- name: reload service firewalld
+  systemd:
+    name: firewalld
+    state: reloaded
+  tags:
+  - configure_firewall_rules
+  - deploy
+
+- name: get current uid
+  getent:
+    database: passwd
+    key: "{{ target_user }}"
+  tags:
+  - create_registry_folders
+  - deploy
+
+- name: Print the gateway for each host when defined
+  ansible.builtin.debug:
+    msg: "user id {{ getent_passwd.admin[1] }}"
+  tags:
+  - create_registry_folders
+  - deploy
+
+- name:  Set Directory Name 
+  set_fact:
+    directory_name: "{{ getent_passwd.admin[1] }}"
+  tags:
+  - create_registry_folders
+  - deploy
+
+- name: Create "{{ directory_name }}" and associated folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    recurse: yes
+    owner: "{{ target_user }}"
+    group: "{{ target_user }}"
+    mode: '0700'
+  with_items:
+    - "/run/user/{{ directory_name }}"
+  tags:
+  - create_registry_folders
+  - deploy
+
+
+- name: Run registry container 
+  containers.podman.podman_container:
+    name: myregistry
+    image: docker.io/library/registry:latest
+    state: started
+    volume:
+      - /opt/registry:/var/lib/registry:z
+      - /opt/registry/auth:/auth:z
+      - /opt/registry/certs:/certs:z
+    env:
+      REGISTRY_AUTH: "htpasswd"
+      REGISTRY_AUTH_HTPASSWD_REALM: "Registry Realm"
+      REGISTRY_AUTH_HTPASSWD_PATH: "/auth/htpasswd"
+      REGISTRY_HTTP_TLS_CERTIFICATE: "/certs/{{ registry_fqdn }}.crt"
+      REGISTRY_HTTP_TLS_KEY: "/certs/{{ registry_fqdn }}.key"
+      REGISTRY_COMPATIBILITY_SCHEMA1_ENABLED: true
+    ports:
+        - "5000:5000"
+  tags:
+  - run_registry_container
+  - deploy
+
+- name: Login to default registry and create ${XDG_RUNTIME_DIR}/containers/auth.json
+  containers.podman.podman_login:
+    username: "{{ registry_username }}"
+    password: "{{ registry_password }}"
+    registry: "{{ registry_fqdn }}:5000"
+  tags:
+  - run_registry_container
+  - deploy
+
+- name: Tear Down Registry
+  import_tasks: tear_down_registry.yml
+  tags:
+  - teardown_registry
+  - remove_container
+  - stop_container
+
+#- name:  Still testing
+#  import_tasks: self-signed-cert.yml

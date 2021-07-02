@@ -1,0 +1,17 @@
+---
+- name: stop registry container
+  containers.podman.podman_container:
+    name: myregistry
+    state: stopped
+  tags:
+  - teardown_registry
+  - remove_container
+  - stop_container
+
+- name: remove registry container
+  containers.podman.podman_container:
+    name: myregistry
+    state: absent
+  tags:
+  - teardown_registry
+  - remove_container
